@@ -1,4 +1,5 @@
 require 'json'
+require_relative 'errors.rb'
 
 class DependencyResolver
   attr_reader :json_data
@@ -13,6 +14,8 @@ class DependencyResolver
 
   def add(task)
     return if finished_tasks.include?(task['name'])
+    raise CircularDependencyError if visited_tasks.include? task['name']
+    visited_tasks << task['name']
 
     task['requires']&.each { |name| add(find_task_by_name(name)) }
     finished_tasks << task['name']
@@ -33,8 +36,16 @@ class DependencyResolver
     self.class.finished_tasks
   end
 
+  def visited_tasks
+    self.class.visited_tasks
+  end
+
   def self.finished_tasks
     @finished_tasks ||= []
+  end
+
+  def self.visited_tasks
+    @visited_tasks ||= []
   end
 
   def find_task_by_name(name)

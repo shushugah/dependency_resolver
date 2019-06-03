@@ -1,8 +1,23 @@
+# frozen_string_literal: true
+
 require './dependency_resolver.rb'
 require 'spec_helper.rb'
 
 RSpec.describe DependencyResolver do
+  def build_task(number, requires = nil)
+    if requires.nil?
+      { 'name' => "task-#{number}", 'command' => "command#{number}" }
+    else
+      {
+        'name' => "task-#{number}",
+        'command' => "command#{number}",
+        'requires' => ["task-#{requires}"]
+      }
+    end
+  end
+
   let(:dependency) { described_class.new('./tasks.json') }
+  let(:bash_header) { "#!/usr/bin/env ruby\n\n" }
 
   describe '#initialize' do
     it 'raises error for missing json file' do
@@ -11,29 +26,24 @@ RSpec.describe DependencyResolver do
 
     it 'initializes "bash headers"' do
       @buffer = StringIO.new
-      @bash_header = "#!/usr/bin/env ruby\n\n"
-      allow(File).to receive(:open).with('tasks.sh','w').and_return(@buffer)
+      allow(File).to receive(:open).with('tasks.sh', 'w').and_return(@buffer)
 
       dependency
-      expect(@buffer.string).to eq @bash_header
+      expect(@buffer.string).to eq bash_header
     end
   end
 
   describe '#add' do
-    let(:task_1) {{ 'name' => 'task-1', 'command' => 'command1' }}
-    let(:task_2) {{ 'name' => 'task-2', 'command' => 'command2' }}
-    let(:task_4) {{ 'name' => 'task-4', 'command' => 'command4' }}
-    let(:task_3) do
-      {
-        'name' => 'task-3',
-        'command' => 'command3',
-        'requires' => ['task-4']
-      }
-    end
+    let(:task_1) { build_task(1) }
+    let(:task_2) { build_task(2) }
+    let(:task_4) { build_task(4) }
+    let(:task_3) { build_task(3, 4) }
+    let(:task_5) { build_task(5, 6) }
+    let(:task_6) { build_task(6, 4) }
 
     before(:each) do
       @buffer = StringIO.new
-      allow(File).to receive(:open).with('tasks.sh','w').and_return(@buffer)
+      allow(File).to receive(:open).with('tasks.sh', 'w').and_return(@buffer)
     end
 
     it 'adds a single task' do
@@ -50,8 +60,13 @@ RSpec.describe DependencyResolver do
     it 'outputs tasks in dependent order' do
       expect(dependency).to receive(:find_task_by_name).with('task-4').and_return(task_4)
       dependency.add(task_3)
+      expect(@buffer.string.split("\n").last(2)).to eq %w[command4 command3]
+    end
 
-      expect(@buffer.string.split("\n").last(2)).to eq (%w[command4 command3])
+    it 'raises error' do
+      expect(dependency).to receive(:find_task_by_name).with('task-6').and_return(task_5)
+      expect { dependency.add(task_5) }.to raise_error(CircularDependencyError)
+      expect(@buffer.string).to eq bash_header
     end
   end
 end
