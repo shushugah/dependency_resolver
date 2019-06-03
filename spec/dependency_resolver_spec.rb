@@ -36,10 +36,10 @@ RSpec.describe DependencyResolver do
   describe '#add' do
     let(:task_1) { build_task(1) }
     let(:task_2) { build_task(2) }
-    let(:task_4) { build_task(4) }
     let(:task_3) { build_task(3, 4) }
+    let(:task_4) { build_task(4) }
     let(:task_5) { build_task(5, 6) }
-    let(:task_6) { build_task(6, 4) }
+    let(:task_6) { build_task(6, 5) }
 
     before(:each) do
       @buffer = StringIO.new
@@ -63,9 +63,15 @@ RSpec.describe DependencyResolver do
       expect(@buffer.string.split("\n").last(2)).to eq %w[command4 command3]
     end
 
-    it 'raises error' do
+    it 'raises error for circular task 5' do
       expect(dependency).to receive(:find_task_by_name).with('task-6').and_return(task_5)
       expect { dependency.add(task_5) }.to raise_error(CircularDependencyError)
+      expect(@buffer.string).to eq bash_header
+    end
+
+    it 'raises error for circular task 6' do
+      expect(dependency).to receive(:find_task_by_name).with('task-5').and_return(task_6)
+      expect { dependency.add(task_6) }.to raise_error(CircularDependencyError)
       expect(@buffer.string).to eq bash_header
     end
   end
